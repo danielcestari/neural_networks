@@ -1,0 +1,4 @@
+XOR_dataset = matrix(c(	0,0,0,
+						0,1,1,
+						1,0,1,
+						1,1,0), nrow=4, ncol=3, byrow=T)
