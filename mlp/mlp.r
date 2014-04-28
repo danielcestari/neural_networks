@@ -36,9 +36,15 @@ heaviside <- function(value, threshold=0.5){
 ###################################################
 # Funcao de ativacao logistica
 
-logistic <- function(value, ...){
-	
-	return (1/(1+exp(-value)));
+logistic <- function(value, param=c(1,1), ...){
+	return (param[1]/(1+exp(-param[2]*value)));
+}
+
+###################################################
+# Funcao derivada da ativacao logistica
+
+logistic_deriv <- function(value, param=c(1,1), ...){
+	return (param[2]*value*(1-value))
 }
 
 ###################################################
@@ -57,7 +63,7 @@ eta_cte <- function(n, param=0.1){
 #	com as saidas de todas as camadas
 mlp_forward <- function(example, W, Y_inicial, 
 						entrada_theta=-1, act_func=logistic,
-						act_param=0.5, labelCol, n_camadas, 
+						act_param=c(1,1), labelCol,n_camadas, 
 						n_neuronio_max){
 
 	
@@ -104,8 +110,7 @@ mlp_forward <- function(example, W, Y_inicial,
 
 
 		Y[2:(n_neuronio_max+1),k+1] = 
-			act_func(t(W[,,k]) %*%
-				cbind(Y[,k]), act_param)
+			act_func(t(W[,,k]) %*% cbind(Y[,k]), act_param)
 		# como os pesos dos neuronios
 		# nao pertencentes a camada
 		# em questao sao zero, nao ha
@@ -167,8 +172,9 @@ mlp_forward <- function(example, W, Y_inicial,
 
 mlp_train <- function(dataset, dimension, epochs=10, 
 			eta_func=eta_cte, eta_para=0.1,
-			act_func=heaviside, act_param=0.5, 
-			w_init_zero=T, entrada_theta=-1,
+			act_func=logistic, act_param=c(1,1), 
+			act_derivative=logistic_deriv, 
+			w_init_zero=F, entrada_theta=-1,
 			alpha_momentum=0, epsilon=0.01){
 	
 	
@@ -210,14 +216,19 @@ mlp_train <- function(dataset, dimension, epochs=10,
 	# de entrada para o Theta para todos os neuronios
 	n_neuronio_max = max(dimension[-1])
 	n_entradas = max(dimension) +1
-	n_camadas = length(dimension) -1
+	n_camadas = length(dimension)
 	
-	# inicia vetor de pesos com zero ou randomly
+	# inicia vetor de pesos com zero, randomly ou por uma
+	# matrix passada como parametro
 	total_pesos = n_entradas * n_neuronio_max * n_camadas
-	if(w_init_zero){
-		pesos = rep(0, total_pesos)
+	if(length(w_init_zero) > 1){
+		W = w_init_zero
 	} else{
-		pesos = runif(total_pesos, 0, 1)
+			if(w_init_zero){
+				pesos = rep(0, total_pesos)
+			} else{
+				pesos = runif(total_pesos, 0, 1)
+			}
 	}
 
 	# TODO: aqui que posso colocar informacao a priori
@@ -225,9 +236,17 @@ mlp_train <- function(dataset, dimension, epochs=10,
 	W = array(pesos, c(n_entradas, n_neuronio_max, 
 			n_camadas))
 	
+	# a ultima camada eh uma matrix identidade, usada no
+	# calculo do delta_atual
+	W[,, n_camadas] = 0
+	# a primeira linha eh relativa ao Theta, entao nao 
+	# considero
+	W[2:(n_neuronio_max+1), 1:n_neuronio_max, n_camadas] = 
+					diag(n_neuronio_max)
+
 	# criando matriz tridimensional delta W
-	delta_W = delta_W_momentum = array(0, c(n_entradas, n_neuronio_max,
-			n_camadas))
+	delta_W = delta_W_momentum = array(0, c(n_entradas, 
+		n_neuronio_max,	n_camadas))
 
 	# debug
 	cat('\nInicializacao de W:\n')
@@ -237,18 +256,16 @@ mlp_train <- function(dataset, dimension, epochs=10,
 	# PROVAVELMENTE ESSE TRECHO SERA USADO NOVAMENTE
 	# percorre W zerando, repeitando o numero de neuronios
 	# por camada
-	for(k in 1:n_camadas){
+	for(k in 1:(n_camadas-1)){
 		
 		# adiciona um na entrada para representar o 
 		# Theta
 		entradas = dimension[k] +1
 		neuronios = dimension[k+1]
 		if(entradas != n_entradas)
-			W[(entradas+1):n_entradas,,k] = 
-				c(0)
+			W[(entradas+1):n_entradas,,k] =	c(0)
 		if(neuronios != n_neuronio_max)
-			W[,(neuronios+1):n_neuronio_max,k] = 
-				c(0)
+			W[,(neuronios+1):n_neuronio_max,k] = c(0)
 
 		# debug
 		cat('\n camada:', k)
@@ -294,14 +311,12 @@ mlp_train <- function(dataset, dimension, epochs=10,
 			
 			Y = mlp_forward(dataset[example,], W, Y_inicial, 
 						entrada_theta, act_func, act_param, 
-						labelCol, n_camadas, n_neuronio_max)
+						labelCol, n_camadas-1, n_neuronio_max)
 			
 			# debug
 			cat('\n\nY:\n')
 			print(Y)
 			
-			cat('\nZ:\n'); print(Z)
-
 			cat('\nFIM FASE FORWARD\n')
 			cat('#################\n')
 			cat('#################\n')
@@ -315,19 +330,19 @@ mlp_train <- function(dataset, dimension, epochs=10,
 
 			# primeiro calculo o erro e atribuo
 			# ao delta_anterior
-			erro = cbind(dataset[example, labelCol:ncol(dataset)] - 
-				Y[2:tail(dimension, n=1), n_camadas+1])
-			delta_anterior = matrix(0, nrow=n_neuronio_max, ncol=1)
+			erro = cbind(
+				dataset[example, labelCol:ncol(dataset)] - 
+				Y[2+(1:tail(dimension, n=1)), n_camadas] )
+			delta_anterior = matrix(0, nrow=n_neuronio_max,
+				ncol=1)
 			delta_anterior[1:length(erro)] = erro
 
 			# atuliza erro quadratico medio
 			average_error = average_error + t(erro) %*% erro
-			
+
 			# calcula a derivada de Phi
-			# TODO: parametrizar a diferenciacao de Phi
-			# por enquanto esta hardcoded
-			Phi_linha = Y[2:nrow(Y), 2:ncol(Y)]
-			Phi_linha = Phi_linha*(1-Phi_linha)
+			Phi_linha = act_derivative(
+				Y[2:nrow(Y), 2:ncol(Y)])
 	
 			# debug
 			cat('Phi_linha\n'); print(Phi_linha)
@@ -335,20 +350,22 @@ mlp_train <- function(dataset, dimension, epochs=10,
 			# calcula os vetores delta e tb ja calcula o 
 			# delta_W para cada camada
 			# tem que iterar de tras para frente
-			for(j in n_camadas:1){
+			for(j in (n_camadas-1):1){
 				
 				# debug
 				cat('\n##############################\n')
 				cat('\n\t\tCamada: ',j)
 				cat('\ndelta_anterior:'); print(delta_anterior)
-				cat('\nW[,,j]:\n'); print(W[,,j])
+				cat('\nW[,,j+1]:\n'); print(W[,,j+1])
 
-				# calcula o delta atual, da camada j, sendo analizada
+				# calcula o delta atual, da camada j, sendo 
+				# analizada
 				# ATENCAO: nao uso a primeira 
 				# linha pq ela eh a entrada
 				# em relacao a Theta, e nao
 				# se calcula delta para o Theta
-				delta_atual = (W[-1,,j] %*% delta_anterior) * Phi_linha[,j]
+				delta_atual = (W[-1,,j+1] %*% delta_anterior)*
+					Phi_linha[,j]
 				
 				# debug
 				cat('\ndelta_atual:\n'); print(delta_atual)
@@ -356,15 +373,19 @@ mlp_train <- function(dataset, dimension, epochs=10,
 				# salva a atualizacao dos pesos dessa camada
 				# CHECAR SE NAO HA ATUALIZACAO DE PESOS ONDE NAO DEVE, EX NOS NEURONIOS QUE NAO EXISTEM
 				for(i in 1:length(delta_atual)){
-					delta_W[,i,j] = eta_func(iteracao) * delta_atual[i] * Y[,j]
+					delta_W[,i,j] = eta_func(iteracao) * 
+						delta_atual[i] * Y[,j]
 				}
 
-				# faz delta_anterior igual delta_atual para a proxima example
-				delta_anterior = matrix(0, nrow=n_neuronio_max, ncol=1)
-				delta_anterior[1:length(delta_atual)] = delta_atual
+				# faz delta_anterior igual delta_atual para a
+				# proxima example
+				delta_anterior = matrix(0, 
+					nrow=n_neuronio_max, ncol=1)
+				delta_anterior[1:length(delta_atual)] = 
+					delta_atual
 
 				# debug
-				cat('\ndelta_W[,,j]:\n'); print(delta_W[,,j])
+				cat('\ndelta_W[,,j+1]:\n'); print(delta_W[,,j+1])
 			}
 			
 
@@ -383,12 +404,13 @@ mlp_train <- function(dataset, dimension, epochs=10,
 			cat('\n\t\tAtualizacao dos pesos\n')
 			cat('delta_W:\n'); print(delta_W)
 			cat('\n\nW:\n'); print(W)
+			cat('\n\t\t\t\tErro na iteracao:', erro)
 		}
 		
 		# debug
 		cat('\n\n\t\tFim da epoca: ', e)
 		cat('\n\t\tErro acumulado na epoca: ',average_error/(2*nrow(dataset)))
-		
+				cat('\n\nprint:');print(average_error)	
 		
 		# implementar condicao de parada
 		average_error = average_error / (2*nrow(dataset))
@@ -407,17 +429,16 @@ mlp_train <- function(dataset, dimension, epochs=10,
 		print <- original_print
 	}
 
-	return (W)
+	return (W[,,-n_camadas])
 }
 
 
 ###########################################################
-
 # Funcao que valida os pesos do MLP
 
 mlp_validate <- function(dataset, W, dimension,
 			entrada_theta=-1, act_func=logistic, 
-			act_param=0.5){
+			act_param=c(1,1), erro_threshold=0.3){
 	
 	resp = list()
 	resp$average_error = 0
@@ -427,13 +448,12 @@ mlp_validate <- function(dataset, W, dimension,
 	n_entradas = n_colunas - tail(dimension, n=1)
 
 
-	labelCol = ncol(dataset) - 
-		dimension[length(dimension)] +1
-	dimension = c(labelCol-1, dimension)
+	labelCol = n_entradas +1
+	dimension = c(n_entradas, dimension)
 	n_neuronio_max = max(dimension[-1])
-	n_camadas = length(dimension) -1
+	n_camadas = length(dimension)
 	
-	Y_inicial = matrix(0, nrow=n_entradas, 
+	Y_inicial = matrix(0, nrow=n_entradas+1, 
 			ncol=length(dimension))
 	Y_inicial[1,] = entrada_theta
 	
@@ -442,25 +462,28 @@ mlp_validate <- function(dataset, W, dimension,
 	average_error = 0
 	for(i in 1:nrow(dataset)){
 		example = dataset[i, ]
-		D = dataset[i, (n_entradas+1):n_colunas]
-		
-
-		cat('\n\nAA\n\n')
-
+		D = dataset[i, labelCol:n_colunas]
 		Y = mlp_forward(example, W, Y_inicial, 
 				entrada_theta, act_func, act_param, 
-				labelCol, n_camadas, n_neuronio_max)
+				labelCol, n_camadas-1, n_neuronio_max)
 		
-		cat('\n\nBB\n\n')
+		# debug
+		cat('\n\n\t\t\t\tY calculado:\n');print(Y)
+		cat('\n\t\t\tn_camadas:',n_camadas,'\n\n')
+		cat('\t\t\t\tdimension:', dimension,'\n')
+		cat('\t\t\t 2+(1:tail(dimension, n=1)', 2+(1:tail(dimension, n=1)))
+		cat('\n\n\n\t\t\t\t\ttail:', tail(dimension, n=1), '\n')
 
-		#Y = mlp_forward(example, W, dimension, entrada_theta,
-		#				act_func, act_param)
 		# calcula o vetor erro para o dado exemplo
-		erro = D - Y
+		erro = D - Y[1+(1:tail(dimension, n=1)), n_camadas]
 		valor_erro = t(erro) %*% erro
 		
+		STR = 'ACERTOU'
+		if(valor_erro > erro_threshold) STR = 'ERROU'
+
 		resp$execucao = rbind(resp$execucao, 
-								c(Y, D, valor_erro))
+							c(Y[1+(1:tail(dimension, n=1)), 
+							n_camadas], D,valor_erro, STR))
 		
 		average_error = average_error + valor_erro
 	}
