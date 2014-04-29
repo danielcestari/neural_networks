@@ -64,7 +64,7 @@ eta_cte <- function(n, param=0.1){
 mlp_forward <- function(example, W, Y_inicial, 
 						entrada_theta=-1, act_func=logistic,
 						act_param=c(1,1), labelCol,n_camadas, 
-						n_neuronio_max){
+						n_neuronio_max, DEBUG=F){
 
 	
 	# apenas silencia a funcao cat caso a variavel DEBUG 
@@ -79,6 +79,7 @@ mlp_forward <- function(example, W, Y_inicial,
 	}
 
 	# debug
+	cat('\n\n######################## mlp_forward ########################\n\n')
 	cat('\nn_camadas:', n_camadas, ' labelCol:', labelCol,
 		' n_neuronio_max:', n_neuronio_max)
 	cat('\nexample: ', example, '\nY_inicial:\n')
@@ -120,6 +121,8 @@ mlp_forward <- function(example, W, Y_inicial,
 		# backwards
 	}
 	
+	# debug
+	cat('\n\n#################### FIM mlp_forward ###############################\n\n')
 	
 	# antes de sair reestabelece a funcao cat original
 	if(!DEBUG){
@@ -171,11 +174,11 @@ mlp_forward <- function(example, W, Y_inicial,
 #	praticas, questao do intervalo de inicializacao
 
 mlp_train <- function(dataset, dimension, epochs=10, 
-			eta_func=eta_cte, eta_para=0.1,
+			eta_func=eta_cte, eta_param=0.1,
 			act_func=logistic, act_param=c(1,1), 
 			act_derivative=logistic_deriv, 
 			w_init_zero=F, entrada_theta=-1,
-			alpha_momentum=0, epsilon=0.01){
+			alpha_momentum=0, epsilon=0.01, DEBUG=F){
 	
 	
 	# apenas silencia a funcao cat caso a variavel DEBUG 
@@ -188,6 +191,9 @@ mlp_train <- function(dataset, dimension, epochs=10,
 		cat <- mute_cat
 		print <- mute_cat
 	}
+
+	# debug
+	cat('\n\n############# Executando mlp_train ##########################\n\n')
 
 	# adiciona uma coluna no dataset referente ao
 	# parametro Theta, entrada tem valor -1
@@ -229,12 +235,14 @@ mlp_train <- function(dataset, dimension, epochs=10,
 			} else{
 				pesos = runif(total_pesos, 0, 1)
 			}
+	
+			# TODO: aqui que posso colocar informacao a priori
+			
+			W = array(pesos, c(n_entradas, n_neuronio_max, 
+					n_camadas))
+	
 	}
 
-	# TODO: aqui que posso colocar informacao a priori
-	
-	W = array(pesos, c(n_entradas, n_neuronio_max, 
-			n_camadas))
 	
 	# a ultima camada eh uma matrix identidade, usada no
 	# calculo do delta_atual
@@ -332,7 +340,7 @@ mlp_train <- function(dataset, dimension, epochs=10,
 			# ao delta_anterior
 			erro = cbind(
 				dataset[example, labelCol:ncol(dataset)] - 
-				Y[2+(1:tail(dimension, n=1)), n_camadas] )
+				Y[1+(1:tail(dimension, n=1)), n_camadas] )
 			delta_anterior = matrix(0, nrow=n_neuronio_max,
 				ncol=1)
 			delta_anterior[1:length(erro)] = erro
@@ -342,7 +350,7 @@ mlp_train <- function(dataset, dimension, epochs=10,
 
 			# calcula a derivada de Phi
 			Phi_linha = act_derivative(
-				Y[2:nrow(Y), 2:ncol(Y)])
+				Y[2:nrow(Y), 2:ncol(Y)], act_param)
 	
 			# debug
 			cat('Phi_linha\n'); print(Phi_linha)
@@ -373,8 +381,8 @@ mlp_train <- function(dataset, dimension, epochs=10,
 				# salva a atualizacao dos pesos dessa camada
 				# CHECAR SE NAO HA ATUALIZACAO DE PESOS ONDE NAO DEVE, EX NOS NEURONIOS QUE NAO EXISTEM
 				for(i in 1:length(delta_atual)){
-					delta_W[,i,j] = eta_func(iteracao) * 
-						delta_atual[i] * Y[,j]
+					delta_W[,i,j] = eta_func(iteracao, 
+						eta_param) * delta_atual[i] * Y[,j]
 				}
 
 				# faz delta_anterior igual delta_atual para a
@@ -422,6 +430,8 @@ mlp_train <- function(dataset, dimension, epochs=10,
 	}
 
 
+	# debug
+	cat('\n\n##################### FIM mlp_train #####################\n\n')
 	
 	# antes de sair reestabelece a funcao cat e print original
 	if(!DEBUG){
@@ -438,7 +448,21 @@ mlp_train <- function(dataset, dimension, epochs=10,
 
 mlp_validate <- function(dataset, W, dimension,
 			entrada_theta=-1, act_func=logistic, 
-			act_param=c(1,1), erro_threshold=0.3){
+			act_param=c(1,1), erro_threshold=0.3, DEBUG=F){
+	
+	# apenas silencia a funcao cat caso a variavel DEBUG 
+	#	seja FALSE
+	if(!exists('DEBUG')) DEBUG = FALSE
+	mute_cat <- function(...){}
+	if(!DEBUG) {
+		original_cat <- cat
+		original_print <- print
+		cat <- mute_cat
+		print <- mute_cat
+	}
+
+	# debug
+	cat('\n\n############# Executando mlp_validate ##########################\n\n')
 	
 	resp = list()
 	resp$average_error = 0
@@ -471,7 +495,7 @@ mlp_validate <- function(dataset, W, dimension,
 		cat('\n\n\t\t\t\tY calculado:\n');print(Y)
 		cat('\n\t\t\tn_camadas:',n_camadas,'\n\n')
 		cat('\t\t\t\tdimension:', dimension,'\n')
-		cat('\t\t\t 2+(1:tail(dimension, n=1)', 2+(1:tail(dimension, n=1)))
+		cat('\t\t\t 1+(1:tail(dimension, n=1)', 1+(1:tail(dimension, n=1)))
 		cat('\n\n\n\t\t\t\t\ttail:', tail(dimension, n=1), '\n')
 
 		# calcula o vetor erro para o dado exemplo
@@ -479,16 +503,27 @@ mlp_validate <- function(dataset, W, dimension,
 		valor_erro = t(erro) %*% erro
 		
 		STR = 'ACERTOU'
-		if(valor_erro > erro_threshold) STR = 'ERROU'
+		if(sqrt(valor_erro) > erro_threshold) STR = 'ERROU'
 
 		resp$execucao = rbind(resp$execucao, 
 							c(Y[1+(1:tail(dimension, n=1)), 
-							n_camadas], D,valor_erro, STR))
+							n_camadas], D,
+							sqrt(valor_erro), STR))
 		
 		average_error = average_error + valor_erro
 	}
 	average_error = average_error / (2*nrow(dataset))
 	resp$average_error = average_error
+
+
+	# debug
+	cat('\n\n##################### FIM mlp_validate #####################\n\n')
+	
+	# antes de sair reestabelece a funcao cat e print original
+	if(!DEBUG){
+		cat <- original_cat
+		print <- original_print
+	}
 
 	return (resp)
 }
