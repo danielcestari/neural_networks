@@ -69,7 +69,6 @@ mlp_forward <- function(example, W, Y_inicial,
 	
 	# apenas silencia a funcao cat caso a variavel DEBUG 
 	#	seja FALSE
-	if(!exists('DEBUG')) DEBUG = FALSE
 	mute_cat <- function(...){}
 	if(!DEBUG) {
 		original_cat <- cat
@@ -82,7 +81,7 @@ mlp_forward <- function(example, W, Y_inicial,
 	cat('\n\n######################## mlp_forward ########################\n\n')
 	cat('\nn_camadas:', n_camadas, ' labelCol:', labelCol,
 		' n_neuronio_max:', n_neuronio_max)
-	cat('\nexample: ', example, '\nY_inicial:\n')
+	cat('\nexample: '); print(example); cat('\nY_inicial:\n')
 	print(Y_inicial)
 	cat('\nW:\n'); print(W)
 
@@ -92,7 +91,7 @@ mlp_forward <- function(example, W, Y_inicial,
 	
 	# debug
 	cat('\nlabelCol: ',labelCol,'\n')
-	cat('example:',example, '\n')
+	cat('example:'); print(example); cat('\n');
 	
 	cat('\n\t\tFASE FORWARD\n')
 	
@@ -183,7 +182,6 @@ mlp_train <- function(dataset, dimension, epochs=10,
 	
 	# apenas silencia a funcao cat caso a variavel DEBUG 
 	#	seja FALSE
-	if(!exists('DEBUG')) DEBUG = FALSE
 	mute_cat <- function(...){}
 	if(!DEBUG) {
 		original_cat <- cat
@@ -452,7 +450,6 @@ mlp_validate <- function(dataset, W, dimension,
 	
 	# apenas silencia a funcao cat caso a variavel DEBUG 
 	#	seja FALSE
-	if(!exists('DEBUG')) DEBUG = FALSE
 	mute_cat <- function(...){}
 	if(!DEBUG) {
 		original_cat <- cat
@@ -506,9 +503,10 @@ mlp_validate <- function(dataset, W, dimension,
 		if(sqrt(valor_erro) > erro_threshold) STR = 'ERROU'
 
 		resp$execucao = rbind(resp$execucao, 
-							c(Y[1+(1:tail(dimension, n=1)), 
-							n_camadas], D,
-							sqrt(valor_erro), STR))
+							c( round(
+							Y[1+(1:tail(dimension, n=1)),
+							n_camadas], 4), D,
+							round(sqrt(valor_erro),4), STR))
 		
 		average_error = average_error + valor_erro
 	}
