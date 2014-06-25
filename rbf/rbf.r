@@ -1,12 +1,23 @@
 
 # implementação da RBF em R
 
+# TODO: fazer função para desenhar a fronteira de decisão,
+#		ou seja, precisa fazer a inversa da função de base 
+#		radial. G(x)*W=0 é a equação para a fronteira de decisão
+# 		também é interessante desenhar os clusters com um círculo 
+#		marcando o raio de 1 sigma
+
+# TODO: verificar se compensa tentar fazer a rbf mais 
+#		generalizada, com aprendizado supervisionado nas duas
+#		etapas.
 
 ##
 # Função que treina uma rede RBF
 ##
 # dataset			=> Dataset a ser classificado
-# labelCol			=> Primeira coluna com a classe do exemplo
+# labelCol			=> Primeira coluna com a classe. Caso 
+#						tenha mais de uma saída, o código 
+#						calcula a coluna das outras saídas
 # saida				=> Número de neurônios na camada de saída
 # centers_selection	=> Função que executa a seleção dos 
 #						centróides
@@ -14,6 +25,8 @@
 #						radial), dependendo do modo de 
 #						seleção dos centróides não é utilizado
 # sigma				=> Sigma usado na função de base radial
+#						Caso o valor passado seja 0, então uma
+#						seleção automática será feita
 # threshold			=> Parâmetro para estabilização na escolha
 #						dos centróides
 # radial_function	=> Função de base radial
@@ -48,6 +61,25 @@ rbf_train <- function(dataset, labelCol, saida=1,
 	centers = centers_selection(dataset[, 1:(labelCol-1)], k=k, 
 					threshold=threshold)
 	
+	# caso sigma == 0, determina um valor para sigma 
+	# automaticamente
+	# Segue a estratégia de aprendizado especificado no livro 
+	# do haykin seção 7.11 da primeira edição
+	# Segundo o livro isso garante que a gaussiana não seja 
+	# muito "peaked" ou muito "flat"
+	if(sigma == 0){
+		max_dist = 0
+		for(c in 1:length(centers)){
+			for(i in 1:nrow(dataset)){
+				dist = sqrt(sum((centers[c] - dataset[i, 1:(labelCol-1)])^2))
+				if(dist > max_dist){
+					max_dist = dist
+				}
+			}
+		}
+		sigma = max_dist/sqrt(2*k)
+	}
+
 	cat('\nCentros:\n'); print(centers); cat('\n')
 
 	# calcula matriz G
@@ -76,8 +108,6 @@ rbf_train <- function(dataset, labelCol, saida=1,
 	ret$centers = centers
 	ret$sigma = sigma
 	ret$W = W
-
-
 	#ret$G = G
 	#ret$ginv = ginv(G)
 	#ret$d = dataset[, labelCol:ncol(dataset)]
@@ -90,6 +120,10 @@ rbf_train <- function(dataset, labelCol, saida=1,
 	
 	return(ret)
 }
+
+########################################################
+########################################################
+########################################################
 
 ##
 # Dado os parâmetros da rede, e uma amostra classifica
@@ -140,10 +174,23 @@ rbf_test <- function(W, centers, sigma,
 	return( g %*% W )
 }
 
+
+
+########################################################
+########################################################
+########################################################
+
+
 ##
 # Faz validação da RBF para os parâmetros passados
 ##
 # dataset 			=> Dataset usado para treinar e testar rede
+# model				=> Modelo (parâmetros da rede treinada) de
+#						mesmo que retornado pela função rbf_train
+#						Se esse parâmetro for passado apenas 
+#						checa o modelo para o dataset em questão
+#						Ou seja, os parâmetros threshold e 
+#						prop_training são ignorados
 # labelCol          => Primeira coluna com a classe do exemplo
 # centers_selection => Função que executa a seleção dos 
 #                       centróides
@@ -164,32 +211,39 @@ rbf_test <- function(W, centers, sigma,
 # como resposta a saída de maior valor)
 ###
 
-rbf_validate <- function(dataset, labelCol, 
+rbf_validate <- function(dataset, model=NULL, labelCol, 
 						centers_selection=kmeans, 
 						k=5, sigma=1, threshold=0.01, 
 						radial_function=gaussian, 
-						prop_training=0.7 ){
+						prop_training=0.7){
 	
-	# separando training_set e test_set
-	cat('\nSeparando dataset ...\n')
-	dataset_size = nrow(dataset)
-	training_set = sample(dataset_size, round(dataset_size*prop_training))
-	test_set = dataset[-training_set, ]
-	training_set = dataset[training_set, ]
-	cat('Training_set: ', nrow(training_set), 'exemplos\n')
-	cat('Test_set: ', nrow(test_set), 'exemplos\n')
-
-	# treina rede RBF
-	cat('\n\nTreinando a rede ...\n');
-	saida = ncol(dataset) - labelCol
-	model = rbf_train(dataset=training_set, labelCol=labelCol, 
-				saida=saida, centers_selection=centers_selection, 
-				k=k, radial_function=radial_function, 
-				sigma=sigma, threshold=threshold)
+	# apenas separa os dados do dataset se um modelo não for 
+	# passado para teste 
+	if(is.null(model)){
+		test_only = FALSE
+		# separando training_set e test_set
+		cat('\nSeparando dataset ...\n')
+		dataset_size = nrow(dataset)
+		training_set = sample(dataset_size, round(dataset_size*prop_training))
+		test_set = dataset[-training_set, ]
+		training_set = dataset[training_set, ]
+		cat('Training_set: ', nrow(training_set), 'exemplos\n')
+		cat('Test_set: ', nrow(test_set), 'exemplos\n')
 	
-	cat('Centróides encontrados\n')
-	print(model$centers)
-	
+		# treina rede RBF
+		cat('\n\nTreinando a rede ...\n');
+		saida = ncol(dataset) - labelCol
+		model = rbf_train(dataset=training_set, labelCol=labelCol, 
+					saida=saida, centers_selection=centers_selection, 
+					k=k, radial_function=radial_function, 
+					sigma=sigma, threshold=threshold)
+		
+		cat('Centróides encontrados\n')
+		print(model$centers)
+	} else{
+		test_only = TRUE
+		test_set = training_set = dataset
+	}
 	
 	# testando rede treinada
 	cat('\n\nTestando modelo treinado...\n')
@@ -216,9 +270,13 @@ rbf_validate <- function(dataset, labelCol,
 	cat('Erro quadrático médio: ', mean_squared_error, '\n')
 	
 	ret = list()
-	ret$model = model
-	ret$training_set = training_set
-	ret$test_set = test_set
+	# se for apenas para testar já tenho o modelo, test_set e training_set
+	# em outras variáveis
+	if(!test_only){
+		ret$model = model
+		ret$training_set = training_set
+		ret$test_set = test_set
+	}
 	ret$acertos = acertos
 	ret$mean_squared_error = mean_squared_error
 	ret$erro_iter = erro_iter
@@ -226,7 +284,9 @@ rbf_validate <- function(dataset, labelCol,
 	return(ret)
 }
 
-
+########################################################
+############# Funções auxiliares #######################
+########################################################
 
 ##
 # Função de base radial gaussiana
@@ -271,8 +331,6 @@ random_selection <- function(dataset, k=1, ...){
 # cada centróide
 ###
 
-
-## CODIGO DO MELLO
 getClosestCentroid <- function(instance, centroids) {
 
     euclidean = rep(0, nrow(centroids))
@@ -282,7 +340,7 @@ getClosestCentroid <- function(instance, centroids) {
 
     id = which.min(euclidean)
 
-    id
+    return(id)
 }
 
 suppressWarnings(warning("kmeans"))
@@ -335,11 +393,143 @@ kmeans <- function(dataset, k, threshold = 0.1) {
     }
 	
 	return(centroids)
-
-    ret = list()
-    ret$centroids = centroids
-    ret$cluster = allIds
-
-    ret
 }
 
+
+
+########################################################
+########################################################
+########################################################
+
+##
+# Dada uma configuração de rede faz um k-fold Cross-Validation
+# O label do dataset precisa ser especificado por neurônio de saída.
+# Ex: se tem 3 saídas, precisa ter três colunas como label, cada uma
+# representando a saída do correspondente neurônio.
+# Isso é assumido por essa função
+##
+# dataset
+# k_fold
+# 
+##
+# 
+# 
+###
+
+# TODO: normaliza dados ??, Como a saída é um combinador linear acho que não precisa tanto
+
+k_fold_cross_validation <- function(dataset, labelCol, k_fold=10, 
+					saidas=1, k=5, sigma=1, centers_selection=kmeans, 
+					threshold=0.01, radial_function=gaussian){
+	
+	cat('\nExecutado ', k_fold,'-fold Cross-Validation\n\n')
+	
+	
+    # divide dataset em k sub-amostras
+	cat('\nDividindo dataset\n')
+	nexamples = nrow(dataset)
+    subsets = list()
+    subset_size = nexamples/k_fold
+    total_col = ncol(dataset)
+	for(i in 1:k_fold){
+        index = sample(1:nrow(dataset), subset_size)
+        subsets[[i]] = dataset[ index, ]
+
+		dataset = dataset[ -index, ]
+    }
+	
+	# itera k vezes montando um conjunto de treino e de teste
+    experimentos = list()
+    summary_test = c()
+    summary_train = c()
+    for(i in 1:k_fold){
+        train_set = c()
+		test_set = c()
+        for(j in 1:k_fold){
+            if(j != i){
+                train_set = rbind(train_set, subsets[[j]])
+            } else{
+                test_set = subsets[[j]]
+            }
+        }
+
+        experimentos[[i]] = list()
+        experimentos[[i]]$train_set = train_set
+		experimentos[[i]]$test_set = test_set
+		
+		
+		# treina modelo com train_set
+		model = rbf_train(dataset=train_set, labelCol=labelCol, 
+					saida=saidas, k=k, centers_selection=centers_selection, 
+					sigma=sigma, threshold=threshold, 
+					radial_function=radial_function)
+		experimentos[[i]]$model = model
+		
+		# valida modelo treinado com test_set
+		results = rbf_validate(test_set, model=model, labelCol=labelCol,
+                   #centers_selection=centers_selection,
+                   #k=k, sigma=sigma, threshold=threshold,
+                   radial_function=radial_function)
+		
+		# salvando resultados
+		experimentos[[i]]$results = results
+		
+		
+	}
+
+	# TODO: computar max e min dos resultados, em relacao à porcentagem
+
+	return(experimentos)
+	
+}
+
+
+
+##
+# Função que dado o dataset, os centros e o sigma, imprime 
+# o dataset duas a duas variáveis desenhendo a duas fronteiras
+# para cada centro. Uma com raio 1*sigma e outra com raio 
+# 2*sigmas.
+##
+# dataset		=> 
+# labelCol		=> 
+# centers		=> 
+# sigma			=> 
+# W				=> 
+# save_to_file	=> 
+##
+#
+###
+
+# TODO: desenhar a fronteira final, usando W
+
+draw_bounders <- function(dataset, labelCol, centers, sigma, 
+					W, save_to_file=F){
+	
+	# caso tenha mais de uma saída, nesse caso considero 
+	# saídas binárias
+	# crio um único array de saída, com a "classe" do elemento
+	saidas = dataset[, labelCol]
+	if(labelCol != ncol(dataset)){
+		saidas = rep(0, times=nrow(dataset))
+		for(saida in 1:(ncol(dataset) - labelCol +1)){
+			saidas[ dataset[, (labelCol -1 + saida) ] == 1 ] = saida
+		}
+	}
+	
+	# itera entre todas as variáveis
+	for(var1 in 1:(labelCol-2)){
+		for(var2 in (var1+1):(labelCol-1)){
+			dev.new()
+			plot(dataset[, var1], dataset[, var2], col=saidas)
+			#symbols(x=1, y=1, circles=c(5), add=T, inches=F)
+			
+			# se deve salvar em arquivo o grafico
+			if(save_to_file){
+				
+
+				dev.off()
+			}
+		}
+	}
+}
