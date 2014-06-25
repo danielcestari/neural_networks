@@ -1,0 +1,160 @@
+
+
+fazer execuções simples com o Iris
+	caracterizar o Iris, pegar do primeiro trabalho
+	caracterizar o ambiente de experimentação, pegar do primeiro trabalho
+
+	computar tempo para várias configurações
+	computar acurácia para essas várias configurações
+	seguir alguma heurística de como escolher os parâmetros
+		se achar alguma
+	
+	talvez comparar com outra rede, MLP talvez
+		a comparação em acurácia e tempo de execução, para o mesmo ambiente
+	
+
+	desenhar as fronteiras de decisão
+		fazer inversa da gaussiana
+	
+	desenhar os clusters
+	
+
+	testar mais relacionado à dificuldade do problema relacionado à RBF
+	com outra base de dados com maior dimensionalidade
+		acho que a usado no segundo trabalho deve servir
+	
+
+
+
+
+Introdução
+
+O presente trabalho visa a implementação e execução da rede neural artifical 
+Radial Basis Function, RBF, a fim de experimentar essa arquitetura.
+
+Esse modelo utiliza funções de base radial como função de ativação.
+Para cada função de base radial é preciso definir-se a posição dos centróides
+e a abertura de tais funções.
+
+O algoritmo de agrupamento k-means é indicado na seleção dos centróides dessas 
+funções uma vez que considera
+centros que minimizem a distância do centro aos pontos pertencentes a esse
+mesmo centro.
+O algoritmo do k-means utilizado utiliza um parâmetro que especifica quando um
+centróide é conserado estável. Um parâmetro de threshold que se a variação do
+centróide estiver dentro desse valor, este centróide é considerado estável.
+
+Para a completa determinação das funções de base radial ainda é preciso
+determinar o número de centróides ideal, e a abertura, sigma, da função de
+base radial.
+Caso a abertura não seja fornecida adotou-se uma estratégia fornecida no livro
+Neural Network a Comprehensive Foundation, primeira edição, para sua
+determinação automática.
+
+Mas a determinação do número de centros, ou seja, tamanho do espaço escondido,
+é um parâmetro do algoritmo, precisa ser ajustado para o problema em questão.
+
+A base de dados utilizada no trabalho será o já bem conhecido Iris do UCI.
+Serão feitas algumas execuções com configurações diferentes para verificar o
+comportamento do modelo.
+
+****************************
+
+Materiais e Métodos
+
+Bases de dados 
+
+Para o presente relatório foram utilizadas duas bases já muito conhecidas pela
+academia e disponíveis no repositório da de bases de dados de aprendizado de máquina da
+UCI - University of California Irnive.
+	- Iris: 150 exemplos 3 classes, 50 exemplos por classe 
+			(http://archive.ics.uci.edu/ml/datasets/Iris)
+
+
+Ambiente de experimentação 
+
+Para o treinamento e teste dos resultados foi utilizado o pacote estatístico R
+version 3.0.1 (20130516) (http://www.r-project.org/) compilado especificamente para a máquina utilizada nos cálculos.
+Os experimentos foram executados em um notebook Dell Inspiron 15R, com
+processador Intel Core I3 - 350M, e 8GB de memória RAM, rodando o sistema Operacional GNU/Linux 
+Distribuição Gentoo. 
+
+
+Implementação utilizada:
+
+A implementação utilizada na experimentação foi desenvolvida pelo autor para o
+ambiente acima especificado. A fim de manter a legibilidade do presente
+relatório o código não foi aqui incluído, mas encontra-se disponível no
+arquivo em anexo. A implementação tem documentação de cada função com seus
+parâmetros, uma descrição geral da função e seu retorno.
+
+O código basicamente é composto de uma função de treino da RBF, rbf_train, uma
+função de teste para uma dada configuração, rbf_test, uma função para realizar
+o k-fold Cross-Validation, além de funções auxiliares utilizadas nas
+execuções, como kmeans, cálculo da gaussiana, seleção dos centros
+aleatóriamente dentre outas.
+
+As funções relacionadas à RBF estão bem parametrizadas permitindo o ajuste do
+algorimo pelos parâmetros, como o dataset, a coluna do dataset com o rótulo,
+quantas saídas tem a rede, a função de seleção dos centros, número de centros,
+abertura dos centróides, a função de base radial.
+
+Nenhum parâmetro de regularização foi incorporado à implementação utilizada.
+
+
+Parâmetros dos experimentos
+
+
+k=1
+k=2
+k=3
+k=4
+k=5
+k=6
+k=7
+k=8
+
+para cada um variando um pouco sigma 0.5, 1, 2 e 3
+lembrando que o sigma não é o raio do centróide, mas sim o desvio pardão da
+gaussina centrada no centróide.
+
+10-fold cross-validation para cada
+para garantir uma boa consistência do resultado de cada configuração
+
+reportar tabelas com a configuração do experimento, porcentagem de acertos,
+erro absoluto, max e min da porcentagem de acertos para cada 10-fold de cada
+configuração
+Explicar como um acerto é computado, e o erro absoluto
+
+
+TALVEZ NEM FAREI ESSA COMPARACAO COM MLP
+comparar o tempo e desempenho da melhor arquitetura com a melhor mlp do
+trabalho anterior
+
+talvez tb usar a seleção de centros aleatóriamente para a melhor configuração
+(k e sigma)
+
+
+
+************************
+
+Resultados
+
+plot do dataframe colorido, combinação de todas as variáveis
+
+Claramente vê-se que o Iris tem 3 classes, e elas estão razoavelmente bem
+separadas, então faz sentido utilizar k=3
+
+
+basicamente tabela com desempenho para configurações que não a final
+
+para a configuração final plotar o dataset com os vários sigmas
+
+
+************************
+
+Conclusão
+
+
+
+
