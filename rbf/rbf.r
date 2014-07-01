@@ -474,10 +474,16 @@ k_fold_cross_validation <- function(dataset, labelCol, k_fold=10,
 		# salvando resultados
 		experimentos[[i]]$results = results
 		
-		
+		summary_test = c(summary_test, results$acertos)
 	}
 
-	# TODO: computar max e min dos resultados, em relacao à porcentagem
+	# computa max, min, mean e sd dos resultados, em relacao à porcentagem
+	experimentos$min = min(summary_test)
+	experimentos$min_idx = which.min(summary_test)
+	experimentos$max = max(summary_test)
+	experimentos$max_idx = which.max(summary_test)
+	experimentos$mean = mean(summary_test)
+	experimentos$sd = sd(summary_test)
 
 	return(experimentos)
 	
@@ -533,3 +539,158 @@ draw_bounders <- function(dataset, labelCol, centers, sigma,
 		}
 	}
 }
+
+
+
+##
+# Executa vários experimentos variando os parâmetros do modelo
+# Cada execução é um k-fold Cross-Validation.
+# É feita todas as combinações dos parâmetros folds, ks e sigmas
+##
+# 
+# 
+##
+# 
+###
+
+perform_experiments <- function(dataset, labelCol=5, saidas=1,
+				centers_selection=kmeans, threshold=0.01, 
+				radial_function=gaussian, folds=c(), ks=c(), 
+				sigmas=c()){
+	
+	# Itera sobre todas as possíveis configurações
+	cat('\n\n')
+	experimento = list()
+	for(f in 1:length(folds)){
+		experimento[[f]] = list()
+		experimento[[f]]$conf = list()
+		for(k in 1:length(ks)){
+			experimento[[f]]$conf[[k]] = list()
+			
+			for(sigma in 1:length(sigmas)){
+				conf = c(
+						'folds' = folds[f],
+						'k' = ks[k],
+						'sigma' = sigmas[sigma]
+				)
+				cat('\nExecutando k-fold com a seguintes configuração\n')
+				print(conf)
+				
+				elapsed_time = system.time({
+					exec = k_fold_cross_validation(dataset=dataset, labelCol=labelCol, 
+						k_fold=folds[f], saidas=saidas, k=ks[k], sigma=sigmas[sigma], 
+						centers_selection=centers_selection, threshold=threshold, 
+						radial_function=radial_function)
+				});
+				print(elapsed_time)
+
+				experimento[[f]]$conf[[k]][[sigma]] = list()
+				experimento[[f]]$conf[[k]][[sigma]]$conf = conf
+				experimento[[f]]$conf[[k]][[sigma]]$exec = exec
+				
+				
+
+				cat('\n###################################################')
+				cat('\n###################################################\n')
+				
+			}
+		}
+	}
+
+	return(experimento)
+}
+
+
+##
+# Imprime os resultados de cada execução (k-fold Cross-validation)
+##
+#
+#
+##
+#
+###
+
+print_results <- function(exps){
+	cat('\n')
+	for(fold in 1:length(exps)){
+		#cat('\nFold == ', length(exps[[fold]]$conf[[1]][[1]]$exec) -6, '\n')
+		for(k in 1:length(exps[[fold]]$conf)){
+			for(sigma in 1:length(exps[[fold]]$conf[[k]])){
+				cat('\n#######################################\n');
+				cat('Resultados para\n');
+				#print(exps[[fold]]$conf[[k]][[sigma]]$conf)
+				#cat('\n');
+				with(data=exps[[fold]]$conf[[k]][[sigma]], expr={
+					print(conf); cat('\n');
+					
+					# calcula média do erro quadratico médio de cada configuração do 10-fold
+					error = c()
+					for(i in 1:(length(exec)-6)){
+						error = c(error, exec[[i]]$results$mean_squared_error)
+					}
+
+					
+					results = c('min'=exec$min, 'max'=exec$max, 'mean'=exec$mean, 'sd'=exec$sd, 'sq_error'=mean(error))
+					print(results); 
+					cat('\n#######################################\n');
+				});
+			}
+		}
+	}
+}
+
+
+
+
+#################################
+#################################
+#################################
+
+# exemplo de utilização
+# remover os comentários para antes de copiar para testar
+
+#source('rbf.r')
+#iris_dataset = read.table('iris.r')
+
+
+# Executa k-fold cross-validation no iris_dataset
+# labelCol indica a partir de qual coluna começa os labels
+# k_fold são quantos folds
+# saidas quantas saídas esse dataset possui
+# k é o número de centróides a RBF deve interpolar
+# sigma é a abertura das funções de base radial
+# centers_selection é o método de seleção dos centróides, no caso o k-means
+# threshold é o parâmetro de convergência do k-means
+# radial_function é a função de base radial utilizada, no caso uma gaussiana
+
+
+#kfold_exec = k_fold_cross_validation(dataset=iris_dataset, labelCol=5, 
+#			k_fold=10, saidas=3, k=3, sigma=1, 
+#			centers_selection=kmeans, threshold=0.01, 
+#			radial_function=gaussian)
+
+
+
+# para executar vários experimentos seguidos utilizar o comando abaixo
+# os parâmetros são os mesmos da função para o k-fold, com a diferença
+# que os parâmetros folds, ks e sigmas são vetores com os valores a 
+# serem testados no exemplo abaixo será executado um 10-fold variando 
+# k entre 3 e 4, e para cada um também será variado o sigma, serão 
+# experimentados os valores 1 e 2
+
+
+#experimentos = perform_experiments(dataset=iris_dataset, labelCol=5, 
+#			saidas=3, folds=c(10), ks=c(3, 4), sigmas=c(1, 2))
+
+
+# para visualizar os resultados dos experimentos usar o comando abaixo
+# o parâmetro deve ser um objeto retornado pela função perform_experiments
+
+#print_results(experimentos)
+
+
+
+# para maiores detalhes das funções olhar antes da definição da função 
+# tem comentário explicando cada parâmetro
+
+
